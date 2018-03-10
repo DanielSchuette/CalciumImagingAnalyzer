@@ -1,0 +1,33 @@
+# Folder view configuration files
+.DS_Store
+Desktop.ini
+
+# Thumbnail cache files
+._*
+Thumbs.db
+
+# Files that might appear on external disks
+.Spotlight-V100
+.Trashes
+
+# Compiled Python files
+*.pyc
+
+# Compiled C++ files
+*.out
+
+# Application specific files
+venv
+node_modules
+.sass-cache
+
+# Data files
+*.tif
+*.gif
+*.icns
+
+# Temporary files and old versions
+tmp.py
+test.py
+DanielsTestApp_v0.01.py
+DanielsTestApp_v0.02.py
