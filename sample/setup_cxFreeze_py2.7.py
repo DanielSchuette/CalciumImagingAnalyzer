@@ -2,6 +2,7 @@
 from cx_Freeze import setup, Executable
 import os
 import sys
+import io
 import matplotlib
 import tkFileDialog
 import FileDialog
@@ -14,15 +15,15 @@ import packaging.specifiers
 # fine tuning.
 buildOptions = dict(includes = ["matplotlib.backends.backend_tkagg"],
 					include_files = ["../data/if_application-x-python_8974.icns", "../data/example_data.lsm"],
-					packages = ["Tkinter", "numpy.core._methods", "numpy.lib.format", "tkFileDialog", "matplotlib.style", "matplotlib.legend_handler", "FileDialog", "appdirs", "packaging"], 
-					excludes = [])
+					packages = ["Tkinter", "numpy.core._methods", "numpy.lib.format", "tkFileDialog", "matplotlib.style", "matplotlib.legend_handler", "FileDialog", "appdirs", "packaging", "io"], 
+					excludes = ["scipy"])
 
 base = 'Win32GUI' if sys.platform=='win32' else None
 
 os.environ['TCL_LIBRARY'] = "/Library/Frameworks/Tcl.framework/Versions/8.6"
 
 executables = [
-    Executable('sample.py', base=base, targetName = 'CalciumImagingAnalyzer App', icon="../data/if_application-x-python_8974.icns")
+    Executable("sample.py", base=base, targetName = "CalciumImagingAnalyzer App", icon="../data/if_application-x-python_8974.icns")
 ]
 
 setup(name='CalciumImagingAnalyzer',

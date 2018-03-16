@@ -2,13 +2,19 @@
 HELPER FUNCTIONS AND CLASSES! CalciumImagingAnalyzer App
 developed by Daniel (d.schuette@online.de)
 latest version: v0.03 (as of 03/10/2018)
--> runs with python 2.7.14 and not with python 3.6.x
+-> runs with python 2.7.14 and with python 3.6.x
 repository: https://github.com/DanielSchuette/CalciumImagingAnalyzer.git
 '''
-current_app_version = "v0.03"
+current_app_version = "v0.04"
 #####################################
 #### Import All Required Modules ####
 #####################################
+import warnings
+with warnings.catch_warnings(): # suppresses keras' annoying numpy warning
+    warnings.simplefilter("ignore")
+    import keras
+    from keras import layers
+    import tensorflow as tf
 import tifffile as tiff # module downloaded from https://github.com/blink1073/tifffile.git
 import numpy as np
 import pandas as pd
@@ -28,7 +34,7 @@ if sys.version_info[0] < 3:
     import Tkinter as tk
     import ttk as ttk
     import tkMessageBox
-else: # currently, Python 3 does not work 
+else:  
     import tkinter as tk
     from tkinter import ttk
     from tkinter import messagebox
@@ -63,6 +69,10 @@ class scrollableFigure():
 		popup_canvas.config(yscrollcommand=yScrollbar.set)
 		yScrollbar.config(command=popup_canvas.yview)
 
+		# add a size grip
+		sizegrip = ttk.Sizegrip(popup_canvas)
+		sizegrip.grid(in_=yScrollbar, column=1, sticky=tk.SE)
+
 		# plug in the figure
 		figure_agg = FigureCanvasTkAgg(figure, popup_canvas)
 		figure_canvas = figure_agg.get_tk_widget()
@@ -71,6 +81,58 @@ class scrollableFigure():
 		# lastly, connect figure with scrolling region
 		popup_canvas.create_window(0, 0, window=figure_canvas)
 		popup_canvas.config(scrollregion=popup_canvas.bbox(tk.ALL))
+
+##########################################
+#### ScrollableFrame Class Definition ####
+##########################################
+class scrollableFrame(ttk.Frame):
+	'''
+	scrollableFrame inherits from ttk.Frame and can be used to create a scrollable frame in the root window. 
+	'''
+	def __init__(self, parent, *args, **kwargs):
+		ttk.Frame.__init__(self, parent, *args, **kwargs)
+
+		# create a vertical scrollbar
+		vscrollbar = ttk.Scrollbar(self, orient=tk.VERTICAL)
+		vscrollbar.pack(fill=tk.Y, side=tk.RIGHT, expand=False)
+
+		# create a horizontal scrollbar
+		hscrollbar = ttk.Scrollbar(self, orient=tk.HORIZONTAL)
+		hscrollbar.pack(fill=tk.X, side=tk.BOTTOM, expand=False)
+
+		# add a size grip
+		sizegrip = ttk.Sizegrip(self)
+		sizegrip.pack(in_=vscrollbar, side=tk.BOTTOM)
+
+		#Create a canvas object and associate the scrollbars with it
+		self.canvas = tk.Canvas(self, bd=0, highlightthickness=0, yscrollcommand=vscrollbar.set, xscrollcommand=hscrollbar.set)
+		self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+		#Associate scrollbars with canvas view
+		vscrollbar.config(command=self.canvas.yview)
+		hscrollbar.config(command=self.canvas.xview)
+
+		# set the view to 0,0 at initialization
+		self.canvas.xview_moveto(0)
+		self.canvas.yview_moveto(0)
+
+		# create an interior frame to be created inside the canvas     
+		self.interior = ttk.Frame(self.canvas)
+		interior = self.interior
+		interior_id = self.canvas.create_window(0, 0, window=interior, anchor=tk.NW)
+
+		# track changes to the canvas and frame width and sync them,
+		# also updating the scrollbar
+
+		def _configure_interior(event):
+			# update the scrollbars to match the size of the inner frame
+			size = (max(925, interior.winfo_reqwidth()), max(825, interior.winfo_reqheight()))
+			self.canvas.config(scrollregion='0 0 %s %s' % size)
+			if interior.winfo_reqwidth() != self.canvas.winfo_width():
+				# update the canvas's width to fit the inner frame
+				self.canvas.config(width=interior.winfo_reqwidth())
+		interior.bind('<Configure>', _configure_interior)
+
 
 ################################################
 #### ScrollablePopupWindow Class Definition ####
@@ -123,27 +185,31 @@ def place_holder():
 #### Analysis Function 1 ####
 #############################
 
-''' 
-Analysis function 1: Explore different filters / data pre-processing
-The following code reads a .lsm file (maybe batches in a future version) and
-analyses them. This includes a plot of useful statistics.
-''' 
-
 def preprocessingFunction(
 	create_new_directories=False, write_tiff=False, write_entire_movie=False, write_selected_file=False,
-	i=1, cutoff1=40, cutoff2=60, figure_size=(9, 9), file_path=False, # rename i!!
+	i=1, cutoff1=40, cutoff2=60, figure_size=(9, 9), file_path=False # rename i!!
 	):
-	
+	''' 
+	Analysis function 1 Doc String: Explore different filters / data pre-processing
+	The following code reads a .lsm file (maybe batches in a future version) and
+	analyses them. This includes a plot of useful statistics.
+	''' 
 	# disable popup windows (also no plt.show("hold") otherwise tkinter won't show the figure in canvas1)
 	matplotlib.interactive(False)
 
 	# read in .lsm data and return a numpy array with certain dimensions: 
-	image = tiff.imread(file_path)
-	print("You successfully imported a .lsm file from:" + "\n" + str(file_path) + "." + "\n")
-	print("Image dimensions: " + str(image.shape) + "\n") # [1, 1, no_of_pictures, height, width]
-	np.amax(image) # max value of 255; that needs to be transformed to range(0, 1)
-
-	selected_image = (image[0, 0, (i-1), 0:512, 0:512])
+	if file_path != False:
+		try:
+			image = tiff.imread(file_path)
+			print("You successfully imported a .lsm file from:" + "\n" + str(file_path) + "." + "\n")
+			print("Image dimensions: " + str(image.shape) + "\n") # [1, 1, no_of_pictures, height, width]
+			np.amax(image) # max value of 255; that needs to be transformed to range(0, 1)
+			selected_image = (image[0, 0, (i-1), 0:512, 0:512])
+		except Exception as error:
+			raise error
+	else:
+		print("Specify a .lsm file to upload!")	
+		return(False)	
 
 	# if user has no permission to create a new folder, an error will be raised:
 	# https://stackoverflow.com/questions/273192/how-can-i-create-a-directory-if-it-does-not-exist
@@ -291,3 +357,35 @@ def preprocessingFunction(
 #############################
 #### Analysis Function 2 ####
 #############################
+
+def compute_image_convolution(image, kernel_size=(3, 3)):
+	'''
+	Analysis function 2 Doc String: This functions takes a numpy array as an input and computes a convolution
+	using the keras interface. It does take Kernel size as an additional adjustable parameter.
+	'''
+	print(kernel_size[0])
+	model = keras.Sequential()
+	model.add(layers.Convolution2D(filters=3, kernel_size=kernel_size, input_shape=image.shape, 
+		strides=(1, 1), padding='valid', data_format=None, dilation_rate=(1, 1), activation=None, use_bias=True, 
+		kernel_initializer='glorot_uniform', bias_initializer='zeros', kernel_regularizer=None, bias_regularizer=None, 
+		activity_regularizer=None, kernel_constraint=None, bias_constraint=None))
+	
+	# keras expects batches of images so the one image has to be expanded to get the behavior we want
+	image_pseudo_batch = np.expand_dims(image, axis=0)
+	conv_image = model.predict(image_pseudo_batch)
+
+	def visualize_image(conv_batch):
+		image_for_print = np.squeeze(conv_batch, axis=0)
+		print("The image shape was re-transformed from {batch} to {single}.".image(batch=image_pseudo_batch, single=image_for_print))
+		plt.imshow(image_for_print)
+
+
+
+
+
+
+
+
+
+
+
