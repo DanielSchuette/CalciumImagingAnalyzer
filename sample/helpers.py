@@ -1,20 +1,18 @@
 '''
 HELPER FUNCTIONS AND CLASSES! CalciumImagingAnalyzer App
 developed by Daniel (d.schuette@online.de)
-latest version: v0.03 (as of 03/10/2018)
--> runs with python 2.7.14 and with python 3.6.x
+-> runs with python 2.7.14 and python 3.6.x on macOS High Sierra
 repository: https://github.com/DanielSchuette/CalciumImagingAnalyzer.git
 '''
-current_app_version = "v0.04"
+current_app_version = "v0.041"
 #####################################
 #### Import All Required Modules ####
 #####################################
 import warnings
-with warnings.catch_warnings(): # suppresses keras' annoying numpy warning
-    warnings.simplefilter("ignore")
-    import keras
-    from keras import layers
-    import tensorflow as tf
+#with warnings.catch_warnings(): # suppresses keras' annoying numpy warning
+#    warnings.simplefilter("ignore")
+#    import keras
+#    from keras import layers
 import tifffile as tiff # module downloaded from https://github.com/blink1073/tifffile.git
 import numpy as np
 import pandas as pd

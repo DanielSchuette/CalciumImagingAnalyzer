@@ -10,13 +10,16 @@ import appdirs
 import packaging
 import packaging.version
 import packaging.specifiers
+import tensorflow
+import tensorflow.core.protobuf
+from google.protobuf import descriptor as _descriptor
 
 # Dependencies are automatically detected, but it might need
 # fine tuning.
 buildOptions = dict(includes = ["matplotlib.backends.backend_tkagg"],
 					include_files = ["../data/if_application-x-python_8974.icns", "../data/example_data.lsm"],
 					packages = ["Tkinter", "numpy.core._methods", "numpy.lib.format", "tkFileDialog", "matplotlib.style", "matplotlib.legend_handler", "FileDialog", "appdirs", "packaging", "io"], 
-					excludes = ["scipy"])
+					excludes = [])
 
 base = 'Win32GUI' if sys.platform=='win32' else None
 
