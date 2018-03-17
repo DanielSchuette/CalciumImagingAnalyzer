@@ -70,8 +70,19 @@ class scrollableFigure():
 		yScrollbar.config(command=popup_canvas.yview)
 
 		# add a size grip
-		sizegrip = ttk.Sizegrip(popup_canvas)
-		sizegrip.grid(in_=yScrollbar, column=1, sticky=tk.SE)
+		sizegrip = ttk.Sizegrip(master)
+		sizegrip.grid(row=1, column=1, sticky=tk.SE)
+
+		## bind mousepad scroll events to window scrolling
+		# two callback functions to handle "swiping" with mousepad
+		def on_vertical(event):
+			popup_canvas.yview_scroll(-1 * event.delta, 'units')
+
+		def on_horizontal(event):
+			popup_canvas.xview_scroll(-1 * event.delta, 'units')
+		
+		popup_canvas.bind_all('<MouseWheel>', on_vertical)
+		popup_canvas.bind_all('<Shift-MouseWheel>', on_horizontal)
 
 		# plug in the figure
 		figure_agg = FigureCanvasTkAgg(figure, popup_canvas)
@@ -89,6 +100,14 @@ class scrollableFrame(ttk.Frame):
 	'''
 	scrollableFrame inherits from ttk.Frame and can be used to create a scrollable frame in the root window. 
 	'''
+	# two callback functions to handle "swiping" with mousepad
+	def on_vertical(self, event):
+		self.canvas.yview_scroll(-1 * event.delta, 'units')
+
+	def on_horizontal(self, event):
+		self.canvas.xview_scroll(-1 * event.delta, 'units')
+
+    # class __init__ method	
 	def __init__(self, parent, *args, **kwargs):
 		ttk.Frame.__init__(self, parent, *args, **kwargs)
 
@@ -111,10 +130,14 @@ class scrollableFrame(ttk.Frame):
 		#Associate scrollbars with canvas view
 		vscrollbar.config(command=self.canvas.yview)
 		hscrollbar.config(command=self.canvas.xview)
-
+		
 		# set the view to 0,0 at initialization
 		self.canvas.xview_moveto(0)
 		self.canvas.yview_moveto(0)
+		
+		# bind mousepad scroll events to window scrolling
+		self.canvas.bind_all('<MouseWheel>', self.on_vertical)
+		self.canvas.bind_all('<Shift-MouseWheel>', self.on_horizontal)
 
 		# create an interior frame to be created inside the canvas     
 		self.interior = ttk.Frame(self.canvas)
@@ -198,7 +221,7 @@ def preprocessingFunction(
 	matplotlib.interactive(False)
 
 	# read in .lsm data and return a numpy array with certain dimensions: 
-	if file_path != False:
+	if file_path and file_path.endswith(".lsm"):
 		try:
 			image = tiff.imread(file_path)
 			print("You successfully imported a .lsm file from:" + "\n" + str(file_path) + "." + "\n")
