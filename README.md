@@ -31,11 +31,11 @@ Confocal microscopy images (a 'movie') of live cells are provide as an example (
 ## Overview
 Currently, the following functionality is available:
 
-####You can load a file and use the 'Preview' function to see pixel value distribution and the impact of different filters. 
+#### You can load a file and use the 'Preview' function to see pixel value distribution and the impact of different filters. 
 
-####You can find cells in your image using the 'Find cells' function from the drop down menu.
+#### You can find cells in your image using the 'Find cells' function from the drop down menu.
 
-####You can analyze the calcium response of your cells over time using the 'Analysis' function.
+#### You can analyze the calcium response of your cells over time using the 'Analysis' function.
 
 
 ## Input format
