@@ -4,15 +4,17 @@ developed by Daniel (d.schuette@online.de)
 -> runs with python 2.7.14 and python 3.6.x on macOS High Sierra
 repository: https://github.com/DanielSchuette/CalciumImagingAnalyzer.git
 '''
-current_app_version = "v0.041"
+current_app_version = "v0.11"
 #####################################
 #### Import All Required Modules ####
 #####################################
-import warnings
-#with warnings.catch_warnings(): # suppresses keras' annoying numpy warning
-#    warnings.simplefilter("ignore")
-#    import keras
-#    from keras import layers
+import warnings, timeit
+with warnings.catch_warnings(): # suppresses keras' annoying numpy warning
+    warnings.simplefilter("ignore")
+    import keras
+    from keras import layers
+warnings.filterwarnings("ignore", message="numpy.dtype size changed")
+warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
 import tifffile as tiff # module downloaded from https://github.com/blink1073/tifffile.git
 import numpy as np
 import pandas as pd
@@ -37,6 +39,9 @@ else:
     from tkinter import ttk
     from tkinter import messagebox
 import os, errno
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = '2'
+from skimage import measure
+from skimage import filters
 
 #######################################
 #### FigureCanvas Class Definition ####
@@ -51,10 +56,18 @@ class scrollableFigure():
 		# put a figure into a master window 
 		self.createScrollableFigure(figure=figure, master=master, *args, **kwargs)
 
+	## bind mousepad scroll events to window scrolling
+	# two callback functions to handle "swiping" with mousepad
+	def scroll_vertical_pop(self, event):
+		self.popup_canvas.yview_scroll(-1 * event.delta, 'units')
+
+	def scroll_horizontal_pop(self, event):
+		self.popup_canvas.xview_scroll(-1 * event.delta, 'units')
+
 	def createScrollableFigure(self, figure, master, *args, **kwargs):
 		# create a canvas within the popup window
-		popup_canvas = tk.Canvas(master, *args, **kwargs)
-		popup_canvas.grid(row=0, column=0, sticky=tk.NSEW)
+		self.popup_canvas = tk.Canvas(master, *args, **kwargs)
+		self.popup_canvas.grid(row=0, column=0, sticky=tk.NSEW)
 
 		# set up scrollbars
 		xScrollbar = tk.Scrollbar(master, orient=tk.HORIZONTAL)
@@ -62,34 +75,29 @@ class scrollableFigure():
 		xScrollbar.grid(row=1, column=0, sticky=tk.EW)
 		yScrollbar.grid(row=0, column=1, sticky=tk.NS)
 
-		popup_canvas.config(xscrollcommand=xScrollbar.set)
-		xScrollbar.config(command=popup_canvas.xview)
-		popup_canvas.config(yscrollcommand=yScrollbar.set)
-		yScrollbar.config(command=popup_canvas.yview)
+		self.popup_canvas.config(xscrollcommand=xScrollbar.set)
+		xScrollbar.config(command=self.popup_canvas.xview)
+		self.popup_canvas.config(yscrollcommand=yScrollbar.set)
+		yScrollbar.config(command=self.popup_canvas.yview)
 
 		# add a size grip
 		sizegrip = ttk.Sizegrip(master)
 		sizegrip.grid(row=1, column=1, sticky=tk.SE)
-
-		## bind mousepad scroll events to window scrolling
-		# two callback functions to handle "swiping" with mousepad
-		def on_vertical(event):
-			popup_canvas.yview_scroll(-1 * event.delta, 'units')
-
-		def on_horizontal(event):
-			popup_canvas.xview_scroll(-1 * event.delta, 'units')
 		
-		popup_canvas.bind_all('<MouseWheel>', on_vertical)
-		popup_canvas.bind_all('<Shift-MouseWheel>', on_horizontal)
-
 		# plug in the figure
-		figure_agg = FigureCanvasTkAgg(figure, popup_canvas)
+		figure_agg = FigureCanvasTkAgg(figure, self.popup_canvas)
 		figure_canvas = figure_agg.get_tk_widget()
 		figure_canvas.grid(sticky=tk.NSEW)
 
+		self.popup_canvas.bind('<MouseWheel>', self.scroll_vertical_pop) # probably just the figure-canvas needs to be bound
+		self.popup_canvas.bind('<Shift-MouseWheel>', self.scroll_horizontal_pop)
+
+		figure_canvas.bind('<MouseWheel>', self.scroll_vertical_pop)
+		figure_canvas.bind('<Shift-MouseWheel>', self.scroll_horizontal_pop)
+
 		# lastly, connect figure with scrolling region
-		popup_canvas.create_window(0, 0, window=figure_canvas)
-		popup_canvas.config(scrollregion=popup_canvas.bbox(tk.ALL))
+		self.popup_canvas.create_window(0, 0, window=figure_canvas)
+		self.popup_canvas.config(scrollregion=self.popup_canvas.bbox(tk.ALL))
 
 ##########################################
 #### ScrollableFrame Class Definition ####
@@ -99,10 +107,10 @@ class scrollableFrame(ttk.Frame):
 	scrollableFrame inherits from ttk.Frame and can be used to create a scrollable frame in the root window. 
 	'''
 	# two callback functions to handle "swiping" with mousepad
-	def on_vertical(self, event):
+	def scroll_vertical(self, event):
 		self.canvas.yview_scroll(-1 * event.delta, 'units')
 
-	def on_horizontal(self, event):
+	def scroll_horizontal(self, event):
 		self.canvas.xview_scroll(-1 * event.delta, 'units')
 
     # class __init__ method	
@@ -134,8 +142,8 @@ class scrollableFrame(ttk.Frame):
 		self.canvas.yview_moveto(0)
 		
 		# bind mousepad scroll events to window scrolling
-		self.canvas.bind_all('<MouseWheel>', self.on_vertical)
-		self.canvas.bind_all('<Shift-MouseWheel>', self.on_horizontal)
+		self.canvas.bind('<MouseWheel>', self.scroll_vertical)
+		self.canvas.bind('<Shift-MouseWheel>', self.scroll_horizontal)
 
 		# create an interior frame to be created inside the canvas     
 		self.interior = ttk.Frame(self.canvas)
@@ -169,6 +177,7 @@ class PopupWindow(tk.Toplevel):
 		# configure popup window
 		self.title(title)
 		self.focus_force()
+		self.protocol("WM_DELETE_WINDOW", self.destroy)
 				
 		# return a popup window 
 		self.returnPopup()
@@ -208,24 +217,24 @@ def place_holder():
 
 def preprocessingFunction(
 	create_new_directories=False, write_tiff=False, write_entire_movie=False, write_selected_file=False,
-	i=1, cutoff1=40, cutoff2=60, figure_size=(9, 9), file_path=False # rename i!!
-	):
+	image_number=1, cutoff1=40, cutoff2=60, figure_size=(9, 9), file_path=False):
 	''' 
 	Analysis function 1 Doc String: Explore different filters / data pre-processing
 	The following code reads a .lsm file (maybe batches in a future version) and
 	analyses them. This includes a plot of useful statistics.
 	''' 
-	# disable popup windows (also no plt.show("hold") otherwise tkinter won't show the figure in canvas1)
+	# disable popup windows (also no plt.show("hold") otherwise tkinter won't show the figure in canvas)
 	matplotlib.interactive(False)
 
 	# read in .lsm data and return a numpy array with certain dimensions: 
 	if file_path and file_path.endswith(".lsm"):
 		try:
 			image = tiff.imread(file_path)
-			print("You successfully imported a .lsm file from:" + "\n" + str(file_path) + "." + "\n")
+			print("\n" + "You successfully imported a .lsm file from:" + "\n" + str(file_path) + "." + "\n")
 			print("Image dimensions: " + str(image.shape) + "\n") # [1, 1, no_of_pictures, height, width]
 			np.amax(image) # max value of 255; that needs to be transformed to range(0, 1)
-			selected_image = (image[0, 0, (i-1), 0:512, 0:512])
+			selected_image = (image[0, 0, (int(image_number)-1), 0:512, 0:512])
+			print("\n" + "You selected image number {}.".format(str(image_number)) + "\n")
 		except Exception as error:
 			raise error
 	else:
@@ -284,7 +293,7 @@ def preprocessingFunction(
 	colbar_ax = fig.add_axes([0.02, 0.57, 0.035, 0.33]) 
 	# Add axes for colorbar at [left, bottom, width, height] (quantities are in fractions of figure)
 	fig.colorbar(im1, cax=colbar_ax)
-	ax1.set_title("Image {} of {}".format(str(i), str(image.shape[2])))
+	ax1.set_title("Image {} of {}".format(str(image_number), str(image.shape[2])))
 
 	# create a contour figure that extracts prominent features (origin upper left corner)
 	ax2.contour(selected_image, origin="image", cmap="gray")
@@ -295,7 +304,7 @@ def preprocessingFunction(
 	# first, a boxplot helps to see the distribution of pixel values
 	ax3.hist(selected_image.ravel(), bins=256, range=(0.0, 256.0), fc="k", ec="k")
 	ax3.set_yscale("log", nonposy = "clip")
-	ax3.set_title("Histogram of Gray Scale\nValues in Image {}".format(str(i)))
+	ax3.set_title("Histogram of Gray Scale\nValues in Image {}".format(str(image_number)))
 	ax3.tick_params(width=1.5, which="both", labelsize=12)
 	ax3.axvline(x=cutoff1, color="darkred", linewidth=3, linestyle='--')
 	ax3.axvline(x=cutoff2, color="darkblue", linewidth=3, linestyle='--')
@@ -375,32 +384,240 @@ def preprocessingFunction(
 
 	return(fig)
 		
-#############################
-#### Analysis Function 2 ####
-#############################
+############################
+#### Analysis 2 - Class ####
+############################
+# skimage help page (http://www.scipy-lectures.org/packages/scikit-image/auto_examples/plot_labels.html)
+# also useful: https://stackoverflow.com/questions/46441893/connected-component-labeling-in-python
+class ConnectedComponentsLabeling():
+    '''
+    ConnectedComponentsLabeling class can be used to analyze a gray scale image with respect to components it contains.
+    Arguments: 
+    input_image = gray scale image of any size [height, width]. 
+    pixel_threshold = filter; pixel values below this int are set to 0.
+    min_threshold, max_threshold = min and max "cell" size.
+    '''
+    def __init__(self, input_image, pixel_threshold=200, min_threshold=100, max_threshold=2000, skimage=False, fully_connected=True):
+        # monitor elapsed time
+        timer_start = timeit.default_timer()
+        
+        # transform input image to binary image
+        self.im_ccl = self.transformToClusterImage(input_im=input_image, pixel_threshold=pixel_threshold, skimage=skimage, 
+        										   fully_connected=fully_connected)
 
-def compute_image_convolution(image, kernel_size=(3, 3)):
+        # find clusters in ccl image 
+        self.clust_list = self.findClusterSize(input_im_ccl=self.im_ccl)
+
+        # analyze cluster list "clust_list" with respect to size thresholds to find cluster indices for subsetting the original image
+        self.clust_index = self.findClusterIndex(input_list=self.clust_list, min_threshold=min_threshold, max_threshold=max_threshold)
+
+        # lastly, subset the original image with indices and derive "cells" from those clusters
+        self.im_with_cells = self.findCellsInClusters(input_im_ccl=self.im_ccl, cluster_index=self.clust_index)
+        
+        # end and print counter
+        timer_end = timeit.default_timer()
+        print("{} sec elapsed.".format(timer_end - timer_start))
+
+    def CCL_algorithm(self, binary_image, fully_connected):
 	'''
-	Analysis function 2 Doc String: This functions takes a numpy array as an input and computes a convolution
-	using the keras interface. It does take Kernel size as an additional adjustable parameter.
+	!!!!!!!!!!!!!!
+	ATTENTION: Does currently not work. No second-pass loop with 'union-find' implemented. Thus, labels are still a mess! Use
+			   skimage's build-in function for connected components labeling!
+	!!!!!!!!!!!!!!
+	Connected components labeling algorithm. Takes a binary image (0, 1) as an input.
+	'Fully_connected=boolean' defines whether to use 4- or 8-connectivity:
+		# i = row index
+		# j = column index
+		### which positions to test ###
+		###
+		###	[i-1, j-1]  [i-1, j] [i-1, j+1]
+		###	          \	  |	    /
+		###	[i, j-1] - 	[i, j]
+		###
 	'''
-	print(kernel_size[0])
-	model = keras.Sequential()
-	model.add(layers.Convolution2D(filters=3, kernel_size=kernel_size, input_shape=image.shape, 
-		strides=(1, 1), padding='valid', data_format=None, dilation_rate=(1, 1), activation=None, use_bias=True, 
-		kernel_initializer='glorot_uniform', bias_initializer='zeros', kernel_regularizer=None, bias_regularizer=None, 
-		activity_regularizer=None, kernel_constraint=None, bias_constraint=None))
+	print("Start CCL algorithm.")
+
+	# initialize an all-0 np.array and a counter
+	cluster_counter = 0
+	ccl_image = np.zeros(shape=binary_image.shape, dtype=np.int)
+
+	# iterator over image (actual algorithm)
+	for i in range(0, binary_image.shape[0]): 
+
+		for j in range(0, binary_image.shape[1]): 
+			
+			# test elements
+			if binary_image[i, j] == 1:
+				## test all adjacent elements
+				# -- 1 --
+				if fully_connected and i != 0 and j != 0 and binary_image[i-1, j-1] == 1: 
+					ccl_image[i, j] = ccl_image[i-1, j-1]
+				# -- 2 --
+				elif i != 0 and binary_image[i-1, j] == 1: 
+					ccl_image[i, j] = ccl_image[i-1, j]
+				# -- 3 --
+				elif binary_image[i, j-1] == 1: 
+					ccl_image[i, j] = ccl_image[i, j-1]
+				# -- 4 --
+				# test whether element is last in a row as well!
+				elif fully_connected and j < (binary_image.shape[1]-1) and i != 0 and binary_image[i-1, j+1] == 1: 
+					ccl_image[i, j] = ccl_image[i-1, j+1]
+				
+				# if none of them is a 'positive' neighbor, assign a new cluster number to the element
+				else:
+					cluster_counter += 1
+					ccl_image[i, j] = cluster_counter
+
+	return(ccl_image)
+	'''
+	The second half of the algorithm needs to be implemented if you want to use this self-made function for CCL!
+    '''
+    
+    def transformToClusterImage(self, input_im, pixel_threshold, skimage, fully_connected):
+        '''
+        Transform input image to binary image and analyze with skimage's connected components labeling algorithm or with
+        a home-made algorithm. Output is a np.array with same dimension as input image and cluster numbers as matrix elements.
+        '''
+        internal_copy = np.copy(input_im)
+        internal_copy[internal_copy < pixel_threshold] = 0
+        internal_copy[internal_copy != 0] = 1
+        if skimage:
+        	copy1_ccl = measure.label(internal_copy)
+        else:
+        	copy1_ccl = self.CCL_algorithm(internal_copy, fully_connected)
+        return(copy1_ccl)
+
+    def findClusterSize(self, input_im_ccl):
+        '''
+        Loops over "Connected components image" and finds clusters. A counter is integrated so that users can approximate how
+        long the analysis will take. Throws an error if number of clusters is very large.
+        '''
+        # initialize counters
+        row_count, elem_count = 0, 0
+
+        # initialize a list of clusters to append cluster size to
+        cluster_list = list()
+
+        # loop over matrix elements to find clusters
+        for number in range(1, input_im_ccl.max()+1, 1):
+            print("Evaluating cluster {number} of {max_number}.".format(number=number, max_number=input_im_ccl.max()))
+            cluster_count = 0
+            for row in input_im_ccl:
+                for element in row:
+                    if element == number:
+                        cluster_count += 1
+            cluster_list.append(cluster_count)
+
+        # warning if input has a large number of clusters
+        if input_im_ccl.max() > 500:
+            warnings.warn("Consider to reduce the number of clusters that are evaluated by using a filter.", RuntimeWarning, 
+                          stacklevel=2)
+
+        # return list of cluster sizes
+        return(cluster_list)
+
+    def findClusterIndex(self, input_list, min_threshold, max_threshold):
+        '''
+        Finds indices of clusters.
+        '''
+        cluster_index = list()
+        for element in input_list:
+            if element >= min_threshold and element <= max_threshold:
+                cluster_index.append(input_list.index(element)+1)
+        return(cluster_index)
+
+    def findCellsInClusters(self, input_im_ccl, cluster_index):
+        '''
+        Finds "cells" in clusters.
+        '''
+        # duplicate input image to make sure that it does not get changed during analysis
+        input_im_ccl_2 = np.copy(input_im_ccl)
+
+        # subset input image with cluster indices to delete background and identify actual cells
+        for row in range(0, input_im_ccl_2.shape[0]):
+            for col in range(0, input_im_ccl_2.shape[1]):
+                if input_im_ccl_2[row, col] in cluster_index:
+                    input_im_ccl_2[row, col] = cluster_index.index(input_im_ccl_2[row, col]) + 1
+                else:
+                    input_im_ccl_2[row, col] = 0
+        return(input_im_ccl_2)
+
+############################
+#### Analysis 3 - Class ####
+############################
+class AnalyzeSingleCells():
+	'''
+	To initialize an instance of this class, pass in a .lsm 'movie' and a mask in form of a 'ccl_object'.
+	Start/stop defines the time span that should be used as baseline or for normalization.
+	'''
+	def __init__(self, input_movie, ccl_object, start, stop, legend=True):
+		'''
+		Calls all class functions and ultimately returns a figure
+		'''
+		self.single_cell_traces = self.subsetWithCclObject(input_mov=input_movie, ccl_object=ccl_object)
+
+		self.normalized_traces = self.NormalizeCellTraces(cell_traces=self.single_cell_traces, start=start, stop=stop)
+
+		self.figure = self.PlotCellTraces(cell_traces=self.normalized_traces, legend=legend)
 	
-	# keras expects batches of images so the one image has to be expanded to get the behavior we want
-	image_pseudo_batch = np.expand_dims(image, axis=0)
-	conv_image = model.predict(image_pseudo_batch)
 
-	def visualize_image(conv_batch):
-		image_for_print = np.squeeze(conv_batch, axis=0)
-		print("The image shape was re-transformed from {batch} to {single}.".image(batch=image_pseudo_batch, single=image_for_print))
-		plt.imshow(image_for_print)
+	def subsetWithCclObject(self, input_mov, ccl_object):
+		# create a list to save all 'mean pixel value per cell over time' to
+		clusters_list = list()
+	
+		# loop over all cells or clusters that were identified
+		for i in range(1, (ccl_object.im_with_cells.max()+1)):
+			mask = (ccl_object.im_with_cells == i) # creates a mask for a particular cluster i
+			cells_list = list() # create a list to save mean values to
+			# loop over all images in movie and extract sum of pixel values for a particular cluster i	
+			for j in range(0, input_mov.shape[2]):
+				tmp_im = input_mov[0, 0, j, :, :]
+				cells_list.append(np.mean(tmp_im[mask]))
+
+			# append 'cells_list' to list of all clusters
+			clusters_list.append(cells_list)
+
+		# return mean pixel values per cell in a list
+		return(np.array(clusters_list))
 
 
+	def NormalizeCellTraces(self, cell_traces, start, stop):
+		'''
+		Normalized calcium imaging data in form of an array. The mean of timepoints 'start' until 'stop' per row is used for 
+		normalizing the rest of the respective row. Outputs an array as well.
+		'''
+
+		# create a new array of correct dimensions to store results in
+		output_array = np.zeros(shape=cell_traces.shape, dtype=np.float)
+
+		for i in range(cell_traces.shape[0]):
+			output_array[i, :] = np.divide(cell_traces[i, :], np.mean(cell_traces[i, start:stop]))
+
+		return(output_array)
+
+	def PlotCellTraces(self, cell_traces, legend):
+		'''
+		Takes a np.array with one or multiple rows and plots it as a time course. Use normalized data with this function!
+		'''
+		# create a time scale for x axis
+		time_scale = np.arange(1, (cell_traces.shape[1]+1))
+
+		# set up a figure and a list to save legend labels to
+		fig = plt.figure(figsize=(10,10))	
+		legend_labels = list()
+
+		# loop over rows in input np.array to plot all traces
+		for i in range(cell_traces.shape[0]):
+			plt.plot(time_scale, cell_traces[i, :]) 
+			legend_labels.append("cell_{number}".format(number=i))
+
+		# add a legend and return figure
+		if legend:
+			plt.legend(legend_labels, loc="upper left")
+		plt.title("Single Cell Traces")
+		plt.ylabel("F / F0 (Relative Fluorescence)")
+		plt.xlabel("Time (Secs)")
+		return(fig)
 
 
 

@@ -29,3 +29,4 @@ node_modules
 # Temporary files and old versions
 tmp.py
 test.py
+convolutional_layer.py
