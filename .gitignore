@@ -24,7 +24,7 @@ node_modules
 # Data files
 *.tif
 *.gif
-# *.icns
+*.icns
 
 # Temporary files and old versions
 tmp.py
