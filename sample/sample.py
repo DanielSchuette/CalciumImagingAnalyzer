@@ -4,7 +4,7 @@ This is an app for analyzing calcium imaging results
 -> runs with python 2.7.14 and python 3.6.x on macOS High Sierra
 repository: https://github.com/DanielSchuette/CalciumImagingAnalyzer.git
 '''
-current_app_version = "v0.11"
+current_app_version = "v0.15"
 gui_size = dict(width=850, height=800)
 popup_config = dict(width=500, height=500, takefocus=True, bg="light blue")
 background_color = "light yellow"
@@ -54,6 +54,10 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = '2'
 import helpers as hlp # imports helpers.py
 from skimage import measure
 from skimage import filters
+from skimage.feature import canny
+from scipy import ndimage as ndi
+from skimage.filters import sobel
+from skimage.morphology import watershed
 import logging
 
 # initiate logging for debug purposes
@@ -183,7 +187,8 @@ def pressed_find_cells():
 		image = tiff.imread(open_file_path)
 		selected_image = image[0, 0, (int(analysis_im_no_entry.get()) - 1), :, :]
 		ccl_object = hlp.ConnectedComponentsLabeling(input_image=selected_image, pixel_threshold=cutoff_analysis.get(), 
-												 	 min_threshold=min_cell_size.get(), max_threshold=max_cell_size.get(), skimage=True)
+												 	 min_threshold=min_cell_size.get(), max_threshold=max_cell_size.get(), 
+												 	 skimage=True, method="segmentation")
 		# plot
 		fig_2, (ax1, ax2, ax3) = plt.subplots(nrows=1, ncols=3, figsize=(10, 5))
 		fig_2.subplots_adjust(wspace=0.45, hspace=0.05, right=0.80, left=0.05, bottom=0.05, top=0.95)
@@ -310,7 +315,7 @@ cutoff2_var = tk.IntVar()
 cutoff_analysis = tk.IntVar()
 cutoff1_var.set(30)
 cutoff2_var.set(60)
-cutoff_analysis.set(50)
+cutoff_analysis.set(10)
 
 def get_cutoff1_prev(event):
 	print("A grey scale value cutoff of {} (cutoff 1) will be used for preview.".format(preview_cutoff1_entry.get()))

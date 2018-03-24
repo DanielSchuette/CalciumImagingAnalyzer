@@ -13,8 +13,14 @@ Thumbs.db
 # Compiled Python files
 *.pyc
 
-# Compiled C++ files
+# Compiled C++ files, C++ source files, C++ libraries, and C++ headers
 *.out
+*.cpp
+*.o
+*.so
+
+# Shell scripts
+*.sh
 
 # Application specific files
 venv
@@ -26,7 +32,8 @@ node_modules
 *.gif
 *.icns
 
-# Temporary files and old versions
+# Temporary files, log file and old versions
 tmp.py
 test.py
 convolutional_layer.py
+logfile.txt

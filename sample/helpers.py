@@ -4,7 +4,7 @@ developed by Daniel (d.schuette@online.de)
 -> runs with python 2.7.14 and python 3.6.x on macOS High Sierra
 repository: https://github.com/DanielSchuette/CalciumImagingAnalyzer.git
 '''
-current_app_version = "v0.11"
+current_app_version = "v0.15"
 #####################################
 #### Import All Required Modules ####
 #####################################
@@ -42,6 +42,10 @@ import os, errno
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = '2'
 from skimage import measure
 from skimage import filters
+from skimage.feature import canny
+from scipy import ndimage as ndi
+from skimage.filters import sobel
+from skimage.morphology import watershed
 
 #######################################
 #### FigureCanvas Class Definition ####
@@ -392,23 +396,30 @@ def preprocessingFunction(
 class ConnectedComponentsLabeling():
     '''
     ConnectedComponentsLabeling class can be used to analyze a gray scale image with respect to components it contains.
-    Arguments: 
-    input_image = gray scale image of any size [height, width]. 
-    pixel_threshold = filter; pixel values below this int are set to 0.
-    min_threshold, max_threshold = min and max "cell" size.
+	'method' is 'ccl' by default but 'segmentation' via a watershed algorithm is also implementation
     '''
-    def __init__(self, input_image, pixel_threshold=200, min_threshold=100, max_threshold=2000, skimage=False, fully_connected=True):
+    def __init__(self, input_image, pixel_threshold=200, min_threshold=100, max_threshold=10000, skimage=True, fully_connected=True,
+    			 method="ccl"):
         # monitor elapsed time
         timer_start = timeit.default_timer()
         
         # transform input image to binary image
-        self.im_ccl = self.transformToClusterImage(input_im=input_image, pixel_threshold=pixel_threshold, skimage=skimage, 
-        										   fully_connected=fully_connected)
+        if method == "ccl":
+        	self.im_ccl = self.transformToClusterImage(input_im=input_image, pixel_threshold=pixel_threshold, skimage=skimage, 
+        										   	   fully_connected=fully_connected)
+        elif method == "segmentation":
+        	self.im_ccl = self.imageSegmentation(input_im=input_image, pixel_threshold=pixel_threshold)
+
+        else:
+        	raise "Enter a valid cell identification method! ('ccl', 'segmentation')"
 
         # find clusters in ccl image 
+        print("\n" + "Looking for cells...")
         self.clust_list = self.findClusterSize(input_im_ccl=self.im_ccl)
+        print("\n" + "Cells found!")
 
         # analyze cluster list "clust_list" with respect to size thresholds to find cluster indices for subsetting the original image
+        print("\n" + "Applying min/max size thresholds...")
         self.clust_index = self.findClusterIndex(input_list=self.clust_list, min_threshold=min_threshold, max_threshold=max_threshold)
 
         # lastly, subset the original image with indices and derive "cells" from those clusters
@@ -416,7 +427,8 @@ class ConnectedComponentsLabeling():
         
         # end and print counter
         timer_end = timeit.default_timer()
-        print("{} sec elapsed.".format(timer_end - timer_start))
+        print("\n" + "Done!")
+        print("\n" + "{} sec elapsed.".format(timer_end - timer_start))
 
     def CCL_algorithm(self, binary_image, fully_connected):
 	'''
@@ -481,38 +493,62 @@ class ConnectedComponentsLabeling():
         internal_copy = np.copy(input_im)
         internal_copy[internal_copy < pixel_threshold] = 0
         internal_copy[internal_copy != 0] = 1
+        
         if skimage:
         	copy1_ccl = measure.label(internal_copy)
         else:
         	copy1_ccl = self.CCL_algorithm(internal_copy, fully_connected)
+        
         return(copy1_ccl)
+
+    def imageSegmentation(self, input_im, pixel_threshold):
+		'''
+		Might be more robust than CCL under certain circumstances. 
+		Resource: http://scikit-image.org/docs/dev/user_guide/tutorial_segmentation.html
+		'''
+
+		markers = np.zeros_like(input_im)
+		markers[input_im < pixel_threshold] = 1 # set pixel values to marker values depending on 'pixel_treshold'
+		markers[input_im >= pixel_threshold] = 2
+		elevation_map = sobel(input_im) # compute an elevation map
+
+		segmentation = watershed(elevation_map, markers) # apply whatershed algorithm
+		segmentation2 = ndi.binary_fill_holes(segmentation - 1) # fill small holes
+		labeled_image, x = ndi.label(segmentation2) # label cells in image
+
+		return(labeled_image)
 
     def findClusterSize(self, input_im_ccl):
         '''
-        Loops over "Connected components image" and finds clusters. A counter is integrated so that users can approximate how
-        long the analysis will take. Throws an error if number of clusters is very large.
-        '''
-        # initialize counters
-        row_count, elem_count = 0, 0
+        v0.15: np.unique() based algorithm finds clusters.
+        ***************************
+        DEPRECATED: Loops over "Connected components image" and finds clusters. A counter is integrated so that users can 
+        approximate how long the analysis will take. Throws an error if number of clusters is very large.
+        ***************************
+        '''        
+        # initialize counters, a list of clusters to append cluster size to, and loop over matrix elements to find clusters
+        #cluster_list = list()
+        #row_count, elem_count = 0, 0
 
-        # initialize a list of clusters to append cluster size to
-        cluster_list = list()
-
-        # loop over matrix elements to find clusters
-        for number in range(1, input_im_ccl.max()+1, 1):
-            print("Evaluating cluster {number} of {max_number}.".format(number=number, max_number=input_im_ccl.max()))
-            cluster_count = 0
-            for row in input_im_ccl:
-                for element in row:
-                    if element == number:
-                        cluster_count += 1
-            cluster_list.append(cluster_count)
+        #for number in range(1, input_im_ccl.max()+1, 1):
+        #    print("Evaluating cluster {number} of {max_number}.".format(number=number, max_number=input_im_ccl.max()))
+        #    cluster_count = 0
+        #    for row in input_im_ccl:
+        #        for element in row:
+        #            if element == number:
+        #                cluster_count += 1
+        #    cluster_list.append(cluster_count)
 
         # warning if input has a large number of clusters
-        if input_im_ccl.max() > 500:
-            warnings.warn("Consider to reduce the number of clusters that are evaluated by using a filter.", RuntimeWarning, 
-                          stacklevel=2)
+        #if input_im_ccl.max() > 500:
+        #    warnings.warn("Consider to reduce the number of potential cells that are evaluated by using a filter.", RuntimeWarning, 
+        #                  stacklevel=2)
 
+		# a faster alternative to looping over the matrix elements!
+        unique_clusts, counts_clusts = np.unique(input_im_ccl, return_counts=True)
+        cluster_list = list(counts_clusts)
+        cluster_list.pop(0)
+        
         # return list of cluster sizes
         return(cluster_list)
 
