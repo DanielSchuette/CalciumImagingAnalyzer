@@ -1,4 +1,0 @@
-Quick Start Guide:
-
-Currently, only very limited functionality is available!
-

@@ -1,6 +1,6 @@
 # Calcium Imaging Analyzer App - Git Repository:
 
-This repository provides a GUI application that facilitates the analysis of calcium imaging data - that includes EDA, cell identification, and extraction of summary statistics. The app is currently under development. The current version 0.11 runs on macOS (tested with High Sierra), but it should be Windows-compatible.
+This repository provides a GUI application that facilitates the analysis of calcium imaging data - that includes EDA, cell identification, and extraction of summary statistics. The app is currently under development. The current version 0.15 runs on macOS (tested with High Sierra), but it should be Windows-compatible.
 
 
 # Requirements:
