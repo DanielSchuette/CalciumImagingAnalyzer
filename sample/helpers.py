@@ -4,11 +4,12 @@ developed by Daniel (d.schuette@online.de)
 -> runs with python 2.7.14 and python 3.6.x on macOS High Sierra
 repository: https://github.com/DanielSchuette/CalciumImagingAnalyzer.git
 '''
-current_app_version = "v0.15"
+current_app_version = "v0.2"
 #####################################
 #### Import All Required Modules ####
 #####################################
 import warnings, timeit
+from datetime import datetime
 with warnings.catch_warnings(): # suppresses keras' annoying numpy warning
     warnings.simplefilter("ignore")
     import keras
@@ -159,7 +160,7 @@ class scrollableFrame(ttk.Frame):
 
 		def _configure_interior(event):
 			# update the scrollbars to match the size of the inner frame
-			size = (max(925, interior.winfo_reqwidth()), max(825, interior.winfo_reqheight()))
+			size = (max(925, interior.winfo_reqwidth()), max(760, interior.winfo_reqheight()))
 			self.canvas.config(scrollregion='0 0 %s %s' % size)
 			if interior.winfo_reqwidth() != self.canvas.winfo_width():
 				# update the canvas's width to fit the inner frame
@@ -195,9 +196,33 @@ class PopupWindow(tk.Toplevel):
 #### GUI popup window functions ####
 ####################################
 # help page and about page - popup windows
-helptext = "This is a helpful text."
+helptext = """Please refer to the README file accompanying the GitHub repository or this software at:
+git@github.com:DanielSchuette/CalciumImagingAnalyzer.git"""
 
-abouttext = "Copyright, Disclaimer, Version, GitHub."
+abouttext = """MIT License
+
+Copyright (c) 2018 Daniel Schuette
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+GitHub Repository: git@github.com:DanielSchuette/CalciumImagingAnalyzer.git
+"""
 
 def open_help_popup():
 	if sys.version_info[0] < 3:
@@ -205,23 +230,109 @@ def open_help_popup():
 	else:
 		messagebox.showinfo("Help", helptext)
 
-def open_about_popup():
-	if sys.version_info[0] < 3:
-		tkMessageBox.showinfo("About", abouttext)
-	else:
-		messagebox.showinfo("About", abouttext)
+def open_about_popup(master):
+	about_window = PopupWindow(master)
+	about_window.title("About")
+	about_window.minsize(300, 250)
+	about_window.maxsize(600, 400)
 
-# helpful placeholder function
-def place_holder(): 
-	"nothing"
+	# add a text widget
+	about_text = tk.Text(about_window, height=15, width=80)
+	about_text.pack(side=tk.LEFT, fill=tk.Y)
+
+	# add a scrollbar
+	scrollbar = tk.Scrollbar(about_window)
+	scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+	# configure scrollbar and text
+	about_text.config(yscrollcommand=scrollbar.set)
+	scrollbar.config(command=about_text.yview)
+
+	# insert about text and disable widget afterwards
+	about_text.insert(tk.END, abouttext)
+	about_text.config(state=tk.DISABLED)
+
+def create_new_directories(save_directory):
+	'''
+	This functions checks whether directories exist in specified 'save directory' to save output files to!
+	'''
+	if not os.path.exists("{}/tiffs/".format(save_directory)):
+		try: 
+			os.makedirs("{}/tiffs/".format(save_directory))
+		except OSError as error:
+			if error.errno != errno.EEXIST:
+				raise Exception("Could not create a 'tiffs/' folder!")
+	if not os.path.exists("{}/figures/".format(save_directory)):
+		try: 
+			os.makedirs("{}/figures/".format(save_directory))
+		except OSError as error:
+			if error.errno != errno.EEXIST:
+				raise Exception("Could not create a 'figures/' folder!")
+	if not os.path.exists("{}/results/".format(save_directory)):
+		try: 
+			os.makedirs("{}/results/".format(save_directory))
+		except OSError as error:
+			if error.errno != errno.EEXIST:
+				raise Exception("Could not create a 'results/' folder!")
+
+def save_tiffs(save_directory, image, save_tiff_checkbox):
+	'''
+	This function saves .tif images to a designated directory that was previously specified.
+	'''
+	if save_tiff_checkbox:
+		try:
+			tiff.imsave("{dir}/tiffs/{day}_{time}_{name}.tif".format(
+				dir=save_directory, 
+				day=datetime.now().strftime("%Y_%m_%d"), 
+				time=datetime.now().strftime("%H.%M.%S"),
+				name="analysis_input"), image)
+			print("Image saved to: " + "{}/{}".format(save_directory, "tiffs"))
+		except:
+			print("You did not save a .tif! Check the specified save directory!")
+	else:
+		print("No .tif files written to {}/{}!".format(save_directory, "tiffs"))
+
+def save_pdf(save_directory, figure, save_pdf_checkbox, name):
+	'''
+	This function saves .pdf images to a designated directory that was previously specified.
+	'''
+	if save_pdf_checkbox:
+		try:
+			figure.savefig("{dir}/figures/{day}_{time}_{name}.pdf".format(
+				dir=save_directory, 
+				day=datetime.now().strftime("%Y_%m_%d"), 
+				time=datetime.now().strftime("%H.%M.%S"),
+				name=name))
+			print("Figure saved to: " + "{}/{}".format(save_directory, "figures"))
+		except:
+			print("You did not save a .pdf! Check the specified save directory!")
+	else:
+		print("No .pdf files written to {}/{}".format(save_directory, "figures"))
+
+
+def save_txt(save_directory, matrix, save_txt_checkbox, name):
+	'''
+	This function saves .txt files to a designated directory that was previously specified.
+	'''
+	if save_txt_checkbox:
+		try:
+			np.savetxt("{dir}/results/{day}_{time}_{name}.txt".format(
+				dir=save_directory, 
+				day=datetime.now().strftime("%Y_%m_%d"), 
+				time=datetime.now().strftime("%H.%M.%S"),
+				name=name), matrix)
+			print("Text file saved to: " + "{}/{}".format(save_directory, "results"))
+		except:
+			print("You did not save a .txt! Check the specified save directory!")
+	else:
+		print("No .txt files written to {}/{}".format(save_directory, "results"))
 
 #############################
 #### Analysis Function 1 ####
 #############################
 
-def preprocessingFunction(
-	create_new_directories=False, write_tiff=False, write_entire_movie=False, write_selected_file=False,
-	image_number=1, cutoff1=40, cutoff2=60, figure_size=(9, 9), file_path=False):
+def preprocessingFunction(image_number, cutoff1, cutoff2, file_path, save_directory, save_tiff_checkbox, save_pdf_checkbox,
+	figure_size=(9, 9)):
 	''' 
 	Analysis function 1 Doc String: Explore different filters / data pre-processing
 	The following code reads a .lsm file (maybe batches in a future version) and
@@ -234,55 +345,21 @@ def preprocessingFunction(
 	if file_path and file_path.endswith(".lsm"):
 		try:
 			image = tiff.imread(file_path)
-			print("\n" + "You successfully imported a .lsm file from:" + "\n" + str(file_path) + "." + "\n")
-			print("Image dimensions: " + str(image.shape) + "\n") # [1, 1, no_of_pictures, height, width]
-			np.amax(image) # max value of 255; that needs to be transformed to range(0, 1)
+			print("You successfully imported a .lsm file from:" + "\n" + str(file_path) + ".")
 			selected_image = (image[0, 0, (int(image_number)-1), 0:512, 0:512])
-			print("\n" + "You selected image number {}.".format(str(image_number)) + "\n")
-		except Exception as error:
+			print("You selected image number {}.".format(str(image_number)))
+		except Exception as error: # raise exception if user has no permission to write in directory!
 			raise error
 	else:
 		print("Specify a .lsm file to upload!")	
 		return(False)	
 
-	# if user has no permission to create a new folder, an error will be raised:
-	# https://stackoverflow.com/questions/273192/how-can-i-create-a-directory-if-it-does-not-exist
-
-	if create_new_directories: 
-		'''
-		make sure to delete the if statement prior to production! otherwise the app will not run bug-free
-		if users select to not create new directories but to write tiffs, results, figures to them!
-		'''
-		if not os.path.exists("tiffs/"):
-			try: 
-				os.makedirs("tiffs/")
-			except OSError as error:
-				if error.errno != errno.EEXIST:
-					raise "Could not create a 'tiffs/' folder!"
-		if not os.path.exists("figures/"):
-			try: 
-				os.makedirs("figures/")
-			except OSError as error:
-				if error.errno != errno.EEXIST:
-					raise "Could not create a 'figures/' folder!"
-		if not os.path.exists("results/"):
-			try: 
-				os.makedirs("results/")
-			except OSError as error:
-				if error.errno != errno.EEXIST:
-					raise "Could not create a 'results/' folder!"						
-
-	if write_tiff:
-		if write_entire_movie:	
-			tiff.imsave("{}.tif".format("tiffs/entire_file"), image) # allows to save entire .lsm 'movie' as a .tiff
-		if write_selected_file:
-			tiff.imsave("{}.tif".format("tiffs/selected_image"), selected_image) # allows to save first image of .lsm file as a .tiff
-		print(".tif files written to {}/{}!".format(str(os.getcwd()), "tiffs/") + "\n")
-	else:
-		print("No .tif files written to {}/{}!".format(str(os.getcwd()), "tiffs/") + "\n")
-
+	# create new directories for output files and save tiffs if checkbox is checked	
+	create_new_directories(save_directory=save_directory)
+	save_tiffs(save_directory=save_directory, image=image, save_tiff_checkbox=save_tiff_checkbox)
+		
 	# check image dimensions before plotting
-	print("The plotted image is of " + str(type(selected_image)) + " and a " + str(selected_image.dtype) + " with dimensions " + str(selected_image.shape) + "." + "\n")
+	print("Image format is " +  str(selected_image.dtype) + " with dimensions " + str(selected_image.shape) + ".")
 
 	# plot your image (use .set_action methods for axes!)
 	fig, ((ax1, ax2, ax3), (ax4, ax5, ax6)) = plt.subplots(nrows=2, ncols=3, figsize=figure_size)
@@ -386,6 +463,9 @@ def preprocessingFunction(
 	for axis in subplots_list:
 		[i.set_linewidth(2) for i in axis.spines.values()]	
 
+	# if the checkbox is checked, save figure as pdf
+	save_pdf(save_directory=save_directory, figure=fig, save_pdf_checkbox=save_pdf_checkbox, name="exploratory_data_analysis")
+
 	return(fig)
 		
 ############################
@@ -411,15 +491,15 @@ class ConnectedComponentsLabeling():
         	self.im_ccl = self.imageSegmentation(input_im=input_image, pixel_threshold=pixel_threshold)
 
         else:
-        	raise "Enter a valid cell identification method! ('ccl', 'segmentation')"
+        	raise ValueError("Enter a valid cell identification method! ('ccl', 'segmentation')")
 
         # find clusters in ccl image 
-        print("\n" + "Looking for cells...")
+        print("Looking for cells...")
         self.clust_list = self.findClusterSize(input_im_ccl=self.im_ccl)
-        print("\n" + "Cells found!")
+        print("Cells found!")
 
         # analyze cluster list "clust_list" with respect to size thresholds to find cluster indices for subsetting the original image
-        print("\n" + "Applying min/max size thresholds...")
+        print("Applying min/max size thresholds...")
         self.clust_index = self.findClusterIndex(input_list=self.clust_list, min_threshold=min_threshold, max_threshold=max_threshold)
 
         # lastly, subset the original image with indices and derive "cells" from those clusters
@@ -427,8 +507,8 @@ class ConnectedComponentsLabeling():
         
         # end and print counter
         timer_end = timeit.default_timer()
-        print("\n" + "Done!")
-        print("\n" + "{} sec elapsed.".format(timer_end - timer_start))
+        print("Done!")
+        print("{} sec elapsed.".format(timer_end - timer_start))
 
     def CCL_algorithm(self, binary_image, fully_connected):
 	'''
@@ -560,7 +640,11 @@ class ConnectedComponentsLabeling():
         for element in input_list:
             if element >= min_threshold and element <= max_threshold:
                 cluster_index.append(input_list.index(element)+1)
-        return(cluster_index)
+
+        if len(cluster_index) == 0:
+        	raise ValueError("No cells in range {min} - {max}!".format(min=min_threshold, max=max_threshold))
+        else:
+        	return(cluster_index)
 
     def findCellsInClusters(self, input_im_ccl, cluster_index):
         '''
@@ -572,7 +656,7 @@ class ConnectedComponentsLabeling():
         # subset input image with cluster indices to delete background and identify actual cells
         for row in range(0, input_im_ccl_2.shape[0]):
             for col in range(0, input_im_ccl_2.shape[1]):
-                if input_im_ccl_2[row, col] in cluster_index:
+                if input_im_ccl_2[row, col] in set(cluster_index): # using a set considerably speeds up this step
                     input_im_ccl_2[row, col] = cluster_index.index(input_im_ccl_2[row, col]) + 1
                 else:
                     input_im_ccl_2[row, col] = 0
@@ -586,32 +670,48 @@ class AnalyzeSingleCells():
 	To initialize an instance of this class, pass in a .lsm 'movie' and a mask in form of a 'ccl_object'.
 	Start/stop defines the time span that should be used as baseline or for normalization.
 	'''
-	def __init__(self, input_movie, ccl_object, start, stop, legend=True):
+	def __init__(self, input_movie, ccl_object, start, stop, method="mean", legend=True):
 		'''
 		Calls all class functions and ultimately returns a figure
 		'''
-		self.single_cell_traces = self.subsetWithCclObject(input_mov=input_movie, ccl_object=ccl_object)
+		self.single_cell_traces = self.subsetWithCclObject(input_mov=input_movie, ccl_object=ccl_object, method=method)
 
 		self.normalized_traces = self.NormalizeCellTraces(cell_traces=self.single_cell_traces, start=start, stop=stop)
 
 		self.figure = self.PlotCellTraces(cell_traces=self.normalized_traces, legend=legend)
 	
 
-	def subsetWithCclObject(self, input_mov, ccl_object):
+	def subsetWithCclObject(self, input_mov, ccl_object, method):
 		# create a list to save all 'mean pixel value per cell over time' to
 		clusters_list = list()
 	
 		# loop over all cells or clusters that were identified
-		for i in range(1, (ccl_object.im_with_cells.max()+1)):
-			mask = (ccl_object.im_with_cells == i) # creates a mask for a particular cluster i
-			cells_list = list() # create a list to save mean values to
-			# loop over all images in movie and extract sum of pixel values for a particular cluster i	
-			for j in range(0, input_mov.shape[2]):
-				tmp_im = input_mov[0, 0, j, :, :]
-				cells_list.append(np.mean(tmp_im[mask]))
+		if method == "mean":
+			for i in range(1, (ccl_object.im_with_cells.max()+1)):
+				mask = (ccl_object.im_with_cells == i) # creates a mask for a particular cluster i
+				cells_list = list() # create a list to save mean values to
+				# loop over all images in movie and extract sum of pixel values for a particular cluster i	
+				for j in range(0, input_mov.shape[2]):
+					tmp_im = input_mov[0, 0, j, :, :]
+					cells_list.append(np.mean(tmp_im[mask]))
 
-			# append 'cells_list' to list of all clusters
-			clusters_list.append(cells_list)
+				# append 'cells_list' to list of all clusters
+				clusters_list.append(cells_list)
+
+		elif method == "sum":
+			for i in range(1, (ccl_object.im_with_cells.max()+1)):
+				mask = (ccl_object.im_with_cells == i) # creates a mask for a particular cluster i
+				cells_list = list() # create a list to save mean values to
+				# loop over all images in movie and extract sum of pixel values for a particular cluster i	
+				for j in range(0, input_mov.shape[2]):
+					tmp_im = input_mov[0, 0, j, :, :]
+					cells_list.append(np.sum(tmp_im[mask]))
+
+				# append 'cells_list' to list of all clusters
+				clusters_list.append(cells_list)		
+
+		else:
+			raise ValueError("Specify a valid method! ('mean', 'sum')")
 
 		# return mean pixel values per cell in a list
 		return(np.array(clusters_list))
@@ -655,7 +755,15 @@ class AnalyzeSingleCells():
 		plt.xlabel("Time (Secs)")
 		return(fig)
 
-
+############################
+#### Analysis 4 - Class ####
+############################
+#class TransformAndFilter():
+	'''
+	This class implements methods for filtering and transforming time series data. It requires a time series object as an input.
+	The class methods perform Fourier transform, Kalman filtering, and XXXX.
+	'''
+#	def __init__(self, *args, **kwargs):
 
 
 

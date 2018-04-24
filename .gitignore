@@ -37,3 +37,6 @@ tmp.py
 test.py
 convolutional_layer.py
 logfile.txt
+
+# jupyter notebooks
+*.ipynb
