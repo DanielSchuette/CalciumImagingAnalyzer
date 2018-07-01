@@ -758,12 +758,14 @@ class AnalyzeSingleCells():
 ############################
 #### Analysis 4 - Class ####
 ############################
-#class TransformAndFilter():
+class TransformAndFilter():
 	'''
 	This class implements methods for filtering and transforming time series data. It requires a time series object as an input.
 	The class methods perform Fourier transform, Kalman filtering, and XXXX.
 	'''
-#	def __init__(self, *args, **kwargs):
+	def __init__(self, *args, **kwargs):
+		pass
+
 
 
 
